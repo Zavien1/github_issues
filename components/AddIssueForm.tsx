@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PrismaClient } from "@prisma/client";
 
 interface Issue {
   id: number;
@@ -12,8 +11,6 @@ interface Issue {
 export const AddIssuesForm = () => {
   const [issue, setIssue] = useState<Issue | null>(null);
   const [url, setUrl] = useState("");
-
-  const prisma = new PrismaClient();
 
   const toApiUrl = (publicUrl: string) => {
     // Formats user input URL to match github api url
@@ -42,24 +39,39 @@ export const AddIssuesForm = () => {
     const apiUrl = toApiUrl(publicUrl);
 
     const res = await fetch(apiUrl);
-    const issue = await res.json();
+    const issueData = await res.json();
 
-    // save issue to DB
+    // save issue to DB via API
     if (res.ok) {
-      const savedIssue = await prisma.issue.create({
-        data: {
-          id: issue.id,
-          title: issue.title,
-          body: issue.body,
-          author: issue.user.login,
-          state: issue.state,
-          createdAt: new Date(issue.created_at),
+      const response = await fetch("/api/issue/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          id: issueData.id,
+          title: issueData.title,
+          body: issueData.body,
+          author: issueData.user.login,
+          state: issueData.state,
+          createdAt: new Date(issueData.created_at),
+        }),
       });
 
-      setIssue(savedIssue);
+      if (response.ok) {
+        const text = await response.text();
+        if (text) {
+          const savedIssue = JSON.parse(text);
+          setIssue(savedIssue);
+        } else {
+          console.error("The response from /api/issue/create is empty.");
+        }
+      } else {
+        const errorText = await response.text();
+        console.error("Error from /api/issue/create:", errorText);
+      }
     } else {
-      //   setError(issue);
+      // Handle error
     }
   };
 
@@ -75,6 +87,7 @@ export const AddIssuesForm = () => {
           type="text"
           placeholder="Enter issue URL"
           className="w-full text-black p-2 rounded my-4"
+          autoComplete="off"
         />
         <button
           className="bg-white rounded-lg text-black p-4 font-bold"
